@@ -49,8 +49,7 @@ fn main() {
     let hprocess: HANDLE = unsafe { OpenProcess(PROCESS_ALL_ACCESS, 0, getpid(processex)) };
     if hprocess == INVALID_HANDLE_VALUE {
         unsafe {
-            println!("OpenProcess error : {}", GetLastError());
-            CloseHandle(hprocess)
+            println!("OpenProcess error : {}", GetLastError())
         };
         return;
     }
@@ -65,7 +64,10 @@ fn main() {
         )
     };
     if alloc == ptr::null_mut() {
-        unsafe { println!("VirtualAllocEx error : {}", GetLastError()) };
+        unsafe { 
+            println!("VirtualAllocEx error : {}", GetLastError());
+            CloseHandle(hprocess);
+        };
         return;
     }
 
@@ -79,7 +81,10 @@ fn main() {
         )
     };
     if wpm == 0 {
-        unsafe { println!("WriteProcessMemory error : {}", GetLastError()) };
+        unsafe { 
+            println!("WriteProcessMemory error : {}", GetLastError());
+            CloseHandle(hprocess)
+        };
         return;
     }
 
@@ -97,7 +102,7 @@ fn main() {
     if crt == INVALID_HANDLE_VALUE {
         unsafe {
             println!("CreateRemoteThread error : {}", GetLastError());
-            CloseHandle(crt)
+            CloseHandle(hprocess)
         };
         return;
     }
@@ -115,8 +120,7 @@ fn getpid(procname: &str) -> DWORD {
     if hsnapshot == INVALID_HANDLE_VALUE {
         unsafe {
             println!("Createtoolhelp32Snapshot error : {}", GetLastError());
-            CloseHandle(hsnapshot);
-            return 1;
+            return 1
         };
     }
 
