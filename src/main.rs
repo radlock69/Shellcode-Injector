@@ -7,12 +7,14 @@ use {
             processthreadsapi::*,
             handleapi::*,
             winuser::*,
+            tlhelp32::*,
             errhandlingapi::*
         }
     },
     std::{
         io,
-        ptr
+        ptr,
+        ffi::CString
     }
 };
 
@@ -53,7 +55,9 @@ fn main(){
     let procid: DWORD = pid.trim().parse()
         .expect("enter an integer nigger!");
 
-    let hProcess: HANDLE = unsafe { OpenProcess(PROCESS_ALL_ACCESS, 0, procid) };
+    println!("{}", GetPid("notepad.exe"));  
+
+    let hProcess: HANDLE = unsafe { OpenProcess(PROCESS_ALL_ACCESS, 0, GetPid("notepad.exe")) };
     if hProcess == INVALID_HANDLE_VALUE {
         unsafe {
             println!("OpenProcess error : {}", GetLastError());
@@ -82,4 +86,56 @@ fn main(){
         CloseHandle(hProcess);
         CloseHandle(crt) 
     };
+}
+
+fn GetPid(ProcName: &str) -> DWORD {
+    let mut pid: DWORD = 0;
+
+    let hSnapshot: HANDLE = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if hSnapshot == INVALID_HANDLE_VALUE {
+        unsafe { 
+            println!("Createtoolhelp32Snapshot error : {}", GetLastError());
+            CloseHandle(hSnapshot);
+            return 1
+        };
+
+    }
+
+    let mut pe = PROCESSENTRY32 {
+        dwSize : 0u32,
+        cntUsage: 0u32,
+        th32ProcessID: 0u32,
+        th32DefaultHeapID: 0usize,
+        th32ModuleID: 0u32,
+        cntThreads: 0u32,
+        th32ParentProcessID: 0u32,
+        pcPriClassBase: 0i32,
+        dwFlags: 0u32,
+        szExeFile: [0i8; 260]
+    };
+
+    pe.dwSize = std::mem::size_of::<PROCESSENTRY32>() as DWORD;
+    
+    let p32f = unsafe { Process32First(hSnapshot, &mut pe) };
+    let p32n =  unsafe { Process32Next(hSnapshot,&mut pe) }; 
+
+    if p32f != 0 {
+        if pe.th32ProcessID == 0 {
+            unsafe { Process32Next(hSnapshot, &mut pe) };
+            loop {
+                let mut ExeFile = unsafe { CString::from_raw(&mut pe.szExeFile as *mut _) };
+                let ExeFileStr = ExeFile.to_string_lossy();
+                if ExeFileStr.eq_ignore_ascii_case(ProcName) {
+                    pid = pe.th32ProcessID;
+                    println!("[+] Process Name : {}\n[+] Process ID : {}", ProcName, pid);
+                    break;
+                }
+                if p32n == 0 {
+                    break;
+                }
+            }
+        }
+    }
+    unsafe { CloseHandle(hSnapshot) };
+    pid
 }
